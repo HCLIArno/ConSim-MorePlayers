@@ -1,0 +1,37 @@
+# ---- 构建产物 ----
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+# ---- 本机构建配置（含各人自己的游戏路径，绝不提交）----
+Directory.Build.props
+GameDir.props
+
+# ---- 反编译 / 分析产物（体积大，且属于游戏厂商的代码，不要提交）----
+dump.cs
+il2cpp.h
+script.json
+stringliteral.json
+DummyDll/
+cpp2il_*/
+ilspy_*/
+
+# 注意：下面两条必须锚定到仓库根。
+# 未锚定的 interop/ 会把 installer/payload/unity-libs/ 一起排掉 —— 那是要分发的东西。
+/interop/
+/unity-libs/
+
+# ---- 运行期产物 ----
+*.log
+LogOutput.log
+
+# ---- 系统 ----
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# ---- 编辑器 ----
+.idea/
+*.swp

@@ -1,0 +1,139 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    ============================================================================
+    构建前必须先告诉本工程「游戏装在哪」。
+
+    这个插件要引用游戏目录下的三类 DLL：
+      <游戏目录>\BepInEx\core\       BepInEx 与 Harmony 本体
+      <游戏目录>\BepInEx\interop\    由 BepInEx 首次运行时生成的 IL2CPP 代理程序集
+      <游戏目录>\BepInEx\unity-libs\ Unity 基础库
+
+    而 interop 是「每台机器首次启动游戏时本地生成」的，没法随源码分发，
+    所以必须在本机指定游戏目录。三种指定方式，任选其一：
+
+      1) 命令行：  dotnet build -c Release -p:GameDir="D:\Steam\steamapps\common\Construction Simulator"
+      2) 环境变量：set CONSIM_DIR=D:\Steam\steamapps\common\Construction Simulator
+      3) 在本文件同级或仓库根放一个 Directory.Build.props（已在 .gitignore 里）
+
+    没指定时会在构建期给出明确报错，而不是产出一个跑不起来的 DLL。
+    ============================================================================
+  -->
+
+  <PropertyGroup>
+    <!-- 优先级：命令行 -p:GameDir > 环境变量 CONSIM_DIR -->
+    <GameDir Condition="'$(GameDir)' == ''">$(CONSIM_DIR)</GameDir>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <AssemblyName>ConSimMorePlayers</AssemblyName>
+    <RootNamespace>ConSimMorePlayers</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Nullable>disable</Nullable>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <BepInExCore>$(GameDir)\BepInEx\core</BepInExCore>
+    <InteropDir>$(GameDir)\BepInEx\interop</InteropDir>
+    <UnityLibs>$(GameDir)\BepInEx\unity-libs</UnityLibs>
+  </PropertyGroup>
+
+  <!-- 构建前先检查路径，报错要让人一眼看懂该做什么 -->
+  <Target Name="CheckGameDir" BeforeTargets="ResolveReferences">
+    <Error Condition="'$(GameDir)' == ''"
+           Text="没有指定游戏目录。请用 -p:GameDir=&quot;&lt;游戏目录&gt;&quot; 或设置环境变量 CONSIM_DIR。详见本文件顶部注释。" />
+    <Error Condition="!Exists('$(BepInExCore)')"
+           Text="找不到 $(BepInExCore)。请确认 GameDir 正确，并且游戏至少用 BepInEx 启动过一次。" />
+    <Error Condition="!Exists('$(InteropDir)')"
+           Text="找不到 $(InteropDir)。这是 BepInEx 首次启动游戏时生成的，请先运行一次游戏再构建。" />
+    <Error Condition="!Exists('$(InteropDir)\Wb.GameScripts.dll')"
+           Text="$(InteropDir) 里没有 Wb.GameScripts.dll，interop 生成可能不完整，请删掉该目录后重新启动游戏生成。" />
+  </Target>
+
+  <ItemGroup>
+    <Reference Include="BepInEx.Core">
+      <HintPath>$(BepInExCore)\BepInEx.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="BepInEx.Unity.IL2CPP">
+      <HintPath>$(BepInExCore)\BepInEx.Unity.IL2CPP.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="BepInEx.Unity.Common">
+      <HintPath>$(BepInExCore)\BepInEx.Unity.Common.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(BepInExCore)\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppInterop.Runtime">
+      <HintPath>$(BepInExCore)\Il2CppInterop.Runtime.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppInterop.Common">
+      <HintPath>$(BepInExCore)\Il2CppInterop.Common.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(UnityLibs)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>$(UnityLibs)\UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>$(InteropDir)\UnityEngine.UI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Unity.TextMeshPro">
+      <HintPath>$(InteropDir)\Unity.TextMeshPro.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <Reference Include="Wb.GameScripts">
+      <HintPath>$(InteropDir)\Wb.GameScripts.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Wb.Manager">
+      <HintPath>$(InteropDir)\Wb.Manager.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Wb.Core">
+      <HintPath>$(InteropDir)\Wb.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Wb.Serialization">
+      <HintPath>$(InteropDir)\Wb.Serialization.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2Cppmscorlib">
+      <HintPath>$(InteropDir)\Il2Cppmscorlib.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- Photon：房间人数上限的最终出口在 PhotonNetwork.CreateRoom。
+         这些在 IL2CPP 下都是 interop 代理程序集，参数类型必须用 interop 里的类型
+         （例如 expectedUsers 是 Il2CppStringArray 而不是 string[]）。 -->
+    <Reference Include="PhotonUnityNetworking">
+      <HintPath>$(InteropDir)\PhotonUnityNetworking.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="PhotonRealtime">
+      <HintPath>$(InteropDir)\PhotonRealtime.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Photon3Unity3D">
+      <HintPath>$(InteropDir)\Photon3Unity3D.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>
