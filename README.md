@@ -22,7 +22,7 @@
 ## 给玩家：怎么装
 
 1. **完全退出游戏**（Steam 里点「停止」，不要只关窗口）
-2. 从 [Releases](../../releases) 下载最新的一键安装包，解压到任意位置
+2. 从 [Releases](https://github.com/HCLIArno/ConSim-MorePlayers/releases) 下载最新的一键安装包，解压到任意位置
 3. 双击 **`一键安装.bat`**
 4. 装完从 Steam 正常启动游戏
 
@@ -172,7 +172,7 @@ an 8-slot room and other players can see and join it from the multiplayer lobby.
 **Everyone who joins must install it** — an unmodded client still filters out rooms with more
 than 4 players and will not see the host's room.
 
-Download the one-click installer from [Releases](../../releases), extract, and run `一键安装.bat`
+Download the one-click installer from [Releases](https://github.com/HCLIArno/ConSim-MorePlayers/releases), extract, and run `一键安装.bat`
 (the script is Chinese-only). It auto-detects the game directory via Steam AppID `1273400`,
 backs up everything before writing, and never deletes original files.
 
