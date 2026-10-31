@@ -45,7 +45,7 @@
 
   6. 从 Steam 正常启动游戏
 
-★ 第一次启动会「准备」比较久，然后报一次错，这是正常的，重启游戏就好：
+★ 第一次启动会「准备」比较久，这是正常的：
 
   装完第一次启动游戏时，BepInEx 要先做两件准备工作：
 
@@ -56,22 +56,75 @@
     (2) 用 Cpp2IL 把游戏代码反编译一遍，生成 170 个辅助程序集
         （写进 <游戏目录>\BepInEx\interop\，约 100 MB）。
 
-  第 (2) 步大约十秒到几分钟不等，取决于硬盘和 CPU。做完之后，
-  那个黑色日志窗口里会冒出红色的错，类似：
+  第 (2) 步大约十秒到几分钟不等，取决于硬盘和 CPU。耐心等它跑完即可。
+
+  ★ 本版安装脚本已经帮你关掉了 BepInEx 一个在本游戏上有问题的功能
+    （见下一节），所以正常情况下**不应该出现红色报错**。
+
+  ★ 万一你还是看到这一条：
 
       [Fatal] Unable to execute IL2CPP chainloader, no plugins will be loaded
       [Error] System.InvalidOperationException: Sequence contains more than one element
               at Il2CppInterop...GenericMethod_GetMethod_Hook.FindTargetMethod()
 
-  ★ 这不算失败，插件也没坏。原因是：上面第 (1)(2) 步是在「本次这个进程」
-    里现做的，而 BepInEx 紧接着在这个同样的进程里初始化，会撞上一个
-    已知的小毛病（Il2CppInterop 官方 issue #183，官方标记为「不打算修」）。
+    那说明「准备」恰好是在本次这个进程里现做的，BepInEx 紧接着在同一个进程里
+    初始化时撞上了 Il2CppInterop 的一个已知小毛病（官方 issue #183，标记为
+    「不打算修」）。★ 把游戏完全关掉、重新启动一次就好，插件会正常加载。
 
-  ★ 你只需要：把游戏完全关掉，重新启动一次。这时 interop 已经生成好了，
-    不会再走那条路，插件正常加载。
+  另外：过程中可能会弹出一个黑色的小窗口，那只是日志显示，不用管它。
+  ★ 关闭时请点窗口的「最小化」，千万不要点右上角的 ✕ —— 
+    那会连着游戏一起关掉。
 
-  另外：这个黑色小窗口只是日志显示，不用管它。★ 关闭时请点窗口的「最小化」，
-  千万不要点右上角的 ✕ —— 那会连着游戏一起关掉。
+
+--------------------------------------------------------
+【已经装过旧版本的人看这里】（很重要）
+--------------------------------------------------------
+
+  如果你装的是 2026-10-31 之前的旧安装包，第一次启动游戏时
+  黑色日志窗口里会出现下面这类红色报错，**而且之后每次启动都重复出现**：
+
+      [Error] Unable to execute IL2CPP chainloader, no plugins will be loaded
+      [Error] System.MissingMethodException: Method not found:
+              'LogCallback LogCallback.op_Implicit(System.Action`3<System.String,
+               UnityEngine.LogType>)'
+         at BepInEx.Unity.IL2CPP.Logging.IL2CPPUnityLogSource..ctor()
+         at BepInEx.Unity.IL2CPP.IL2CPPChainloader.SetupUnityLogging()
+
+  看到这个就说明**插件根本没被加载**，游戏里人数还是 4。
+
+  原因：BepInEx 默认要接管 Unity 自己的日志输出，而这个动作在本游戏上
+  做不到（那个转换方法生成不出来）。旧安装包没有关掉它，所以必踩。
+
+  ★ 不用重装，手工改一个文件就行：
+
+      1. 用记事本打开
+
+             <游戏目录>\BepInEx\config\BepInEx.cfg
+
+         （<游戏目录> 就是《建筑模拟器》的安装位置，
+           在 Steam 里右键游戏 →「管理」→「浏览本地文件」可以直接打开）
+
+      2. 找到这一行：
+
+             UnityLogListening = true
+
+         改成：
+
+             UnityLogListening = false
+
+         （如果整个文件里都找不到这一行，就在文件末尾另起一行加上：
+
+             [Logging]
+             UnityLogListening = false
+         ）
+
+      3. 保存、关掉记事本，重新启动游戏。
+
+  改完就不会再报这个错，插件也会正常加载了。
+  ★ 关掉它不影响插件自己的日志 —— 插件日志照常写在 BepInEx\LogOutput.log 里。
+
+  ★ 本版（2026-10-31 之后）的安装包已经把这一步做进脚本了，
+    不需要你手工改。发给朋友时请用新版包。
 
 
 --------------------------------------------------------
@@ -151,10 +204,16 @@
   1b. 第一次装完启动，日志里报红色 [Fatal] Unable to execute IL2CPP
       chainloader / Sequence contains more than one element
      → 这是首次生成 interop 的已知现象，不是装坏了。
-       完全关掉游戏，再启动一次就好。详见前面【安装】第 6 条。
+       完全关掉游戏，再启动一次就好。详见前面【第一次启动会「准备」比较久】。
+
+  1c. 每次启动都报 System.MissingMethodException / LogCallback.op_Implicit
+      （最常见的症状：装了但游戏里人数还是 4）
+     → 说明 BepInEx 的 Unity 日志监听在本游戏上失败了，插件根本没加载。
+       老版安装包必踩，手工改一个配置即可修好。
+       ★ 详见前面【已经装过旧版本的人看这里】。
 
   2. 装了但游戏里人数还是 4
-     → 打开 LogOutput.log 搜「ConSim More Players」，
+     → 先看上面 1c。打开 LogOutput.log 搜「ConSim More Players」，
        看有没有报错，把日志发给我。
 
   3. 朋友还是看不到房间

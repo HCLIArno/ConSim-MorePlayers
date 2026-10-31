@@ -77,6 +77,19 @@ function Set-Content-Dry($Path, $Value, $Note) {
         Set-Content -LiteralPath $Path -Value $Value -Encoding UTF8
     }
 }
+# 写 UTF-8「不带 BOM」的文本。
+# 为什么要单独一个函数：Set-Content -Encoding UTF8 在 Windows PowerShell 5.1 下会写 BOM
+# (EF BB BF)，而 BepInEx 自己的配置文件（BepInEx.cfg 等）都是无 BOM 的。往 BepInEx.cfg
+# 开头塞一个 BOM，有可能让它自带的 TOML 解析器认不出第一行 [节名]。
+function Set-Utf8NoBom-Dry($Path, $Value, $Note) {
+    if ($DryRun) {
+        $extra = ''
+        if ($Note) { $extra = "（$Note）" }
+        Write-Host "  $($script:DryTag)[模拟] 写入配置：$Path$extra" -ForegroundColor Cyan
+    } else {
+        [System.IO.File]::WriteAllText($Path, $Value, (New-Object System.Text.UTF8Encoding($false)))
+    }
+}
 function Invoke-DryRunSummary {
     Write-Host ''
     Write-Host ('-' * 64) -ForegroundColor DarkGray
@@ -384,7 +397,7 @@ if ($DryRun) {
     Write-Host "    插件 DLL       : $dryDll $(if (Test-Path -LiteralPath $dryDll) { '（存在）' } else { '（缺失！正式安装会报错）' })" -ForegroundColor Gray
 
     Write-Host ''
-    Write-Host '  【第 1 步 / 共 4 步：备份】' -ForegroundColor White
+    Write-Host '  【第 1 步 / 共 5 步：备份】' -ForegroundColor White
     if ($dryToBackup.Count -gt 0) {
         Write-Host "    将会新建备份目录：$dryBakDir" -ForegroundColor Gray
         Write-Host "    将会复制以下 $($dryToBackup.Count) 项到备份目录（只读，不改动原件）：" -ForegroundColor Gray
@@ -398,7 +411,7 @@ if ($DryRun) {
     }
 
     Write-Host ''
-    Write-Host '  【第 2 步 / 共 4 步：安装 BepInEx 6 运行库】' -ForegroundColor White
+    Write-Host '  【第 2 步 / 共 5 步：安装 BepInEx 6 运行库】' -ForegroundColor White
     Write-Host "    将会解压 $dryZip" -ForegroundColor Gray
     Write-Host '    到临时目录（正式安装时创建，装完自动清理）：%TEMP%\ConSimMorePlayers_<随机>' -ForegroundColor Gray
     Write-Host "    再逐项复制到 $resolvedDir ：" -ForegroundColor Gray
@@ -423,7 +436,28 @@ if ($DryRun) {
     }
 
     Write-Host ''
-    Write-Host '  【第 3 步 / 共 4 步：预置 Unity 基础库（免下载）】' -ForegroundColor White
+    Write-Host '  【第 3 步 / 共 5 步：关闭 BepInEx 的 Unity 日志监听（本游戏必需）】' -ForegroundColor White
+    $dryBxCfg = Join-Path $resolvedDir 'BepInEx\config\BepInEx.cfg'
+    if (Test-Path -LiteralPath $dryBxCfg) {
+        Write-Host "    配置文件已存在：$dryBxCfg" -ForegroundColor Gray
+        $dryBxText = Get-Content -LiteralPath $dryBxCfg -Raw -Encoding UTF8
+        if ($dryBxText -match '(?m)^UnityLogListening\s*=\s*true\s*$') {
+            Write-Host '    将会把 UnityLogListening 由 true 改为 false' -ForegroundColor DarkGray
+        } else {
+            Write-Host '    当前已是关闭状态，不会改动' -ForegroundColor DarkGray
+        }
+    } else {
+        Write-Host "    将会新建：$dryBxCfg" -ForegroundColor Gray
+        Write-Host '    内容（只写这一项；首次启动时 BepInEx 会把其余默认项补齐）：' -ForegroundColor Gray
+        Write-Host '      [Logging]' -ForegroundColor DarkGray
+        Write-Host '      UnityLogListening = false' -ForegroundColor DarkGray
+    }
+    Write-Host '    原因：BepInEx 6 的 Unity 日志钩子在本游戏上会抛 MissingMethodException' -ForegroundColor DarkGray
+    Write-Host '          （LogCallback.op_Implicit 找不到），导致「no plugins will be loaded」，' -ForegroundColor DarkGray
+    Write-Host '          插件完全不生效。关掉它不影响插件自己的日志。' -ForegroundColor DarkGray
+
+    Write-Host ''
+    Write-Host '  【第 4 步 / 共 5 步：预置 Unity 基础库（免下载）】' -ForegroundColor White
     if (Test-Path -LiteralPath $dryUl) {
         Write-Host "    将会复制 $dryUl" -ForegroundColor Gray
         Write-Host "            到 $(Join-Path $resolvedDir "BepInEx\unity-libs\$UnityLibsZipName")" -ForegroundColor Gray
@@ -433,7 +467,7 @@ if ($DryRun) {
     }
 
     Write-Host ''
-    Write-Host '  【第 4 步 / 共 4 步：放入插件并写入人数】' -ForegroundColor White
+    Write-Host '  【第 5 步 / 共 5 步：放入插件并写入人数】' -ForegroundColor White
     Write-Host "    将会新建目录：$(Join-Path $resolvedDir 'BepInEx\plugins')" -ForegroundColor Gray
     Write-Host "    将会复制 $dryDll" -ForegroundColor Gray
     Write-Host "            到 $(Join-Path $resolvedDir 'BepInEx\plugins\ConSimMorePlayers.dll')" -ForegroundColor Gray
@@ -494,7 +528,7 @@ if ($running.Count -gt 0) {
 # ----------------------------------------------------------------------
 # 1) 备份
 # ----------------------------------------------------------------------
-Write-Title '第 1 步 / 共 4 步：备份现有文件'
+Write-Title '第 1 步 / 共 5 步：备份现有文件'
 
 $stamp  = Get-Date -Format 'yyyyMMdd-HHmmss'
 $bakDir = Join-Path $resolvedDir "$BakTag\安装前-$stamp"
@@ -525,7 +559,7 @@ if ($toBackup.Count -gt 0) {
 # ----------------------------------------------------------------------
 # 2) 释放 BepInEx 运行库
 # ----------------------------------------------------------------------
-Write-Title '第 2 步 / 共 4 步：安装 BepInEx 6 运行库'
+Write-Title '第 2 步 / 共 5 步：安装 BepInEx 6 运行库'
 
 $zip = Join-Path $PSScriptRoot '..\payload\BepInEx6-win-x64.zip'
 if (-not (Test-Path -LiteralPath $zip)) { $zip = Join-Path $PSScriptRoot 'BepInEx6-win-x64.zip' }
@@ -567,9 +601,52 @@ if ($DryRun) {
 }
 
 # ----------------------------------------------------------------------
-# 3) 预置 Unity 基础库，免去首次启动的联网下载
+# 3) 关闭 BepInEx 的 Unity 日志监听（本游戏必需，否则插件完全不加载）
+#
+# 为什么必须关：
+#   BepInEx 6 的 IL2CPPChainloader.SetupUnityLogging() 会把
+#   System.Action<string, LogType> 隐式转换成 UnityEngine.Application.LogCallback。
+#   这一步依赖 Il2CppInterop 在运行时补出来的转换方法，在本游戏上补不出来，
+#   于是链加载器直接失败，日志里是：
+#     [Error] Unable to execute IL2CPP chainloader, no plugins will be loaded
+#     System.MissingMethodException: Method not found:
+#       'LogCallback LogCallback.op_Implicit(System.Action`3<System.String,UnityEngine.LogType>)'
+#       at BepInEx.Unity.IL2CPP.Logging.IL2CPPUnityLogSource..ctor()
+#       at BepInEx.Unity.IL2CPP.IL2CPPChainloader.SetupUnityLogging()
+#   （有的机器上报的是同位置的
+#     System.InvalidOperationException: Sequence contains more than one element
+#     at Il2CppInterop...GenericMethod_GetMethod_Hook.FindTargetMethod()，
+#    那是同一个钩子在生成 interop 的当次进程里没准备好，重启一次能熬过去；
+#    但上面那个 MissingMethodException 会每次启动都复现。两种都靠这一项根治。）
+#
+#   关掉之后插件自己的日志不受影响 —— 那些走 ManualLogSource 直接写 LogOutput.log，
+#   不经过 Unity 的日志回调。参考 BepInEx issue #809 / #798。
 # ----------------------------------------------------------------------
-Write-Title '第 3 步 / 共 4 步：预置 Unity 基础库（免下载）'
+Write-Title '第 3 步 / 共 5 步：关闭 BepInEx 的 Unity 日志监听（本游戏必需）'
+
+$bxCfg = Join-Path $resolvedDir 'BepInEx\config\BepInEx.cfg'
+if (Test-Path -LiteralPath $bxCfg) {
+    $bxText = Get-Content -LiteralPath $bxCfg -Raw -Encoding UTF8
+    if ($bxText -match '(?m)^UnityLogListening\s*=\s*true\s*$') {
+        $bxText = [regex]::Replace($bxText, '(?m)^UnityLogListening\s*=\s*true\s*$', 'UnityLogListening = false')
+        Set-Utf8NoBom-Dry -Path $bxCfg -Value $bxText -Note '只改 UnityLogListening 一行'
+        Write-Ok '已关闭 Unity 日志监听（否则插件不会被加载）'
+    } else {
+        Write-Ok 'Unity 日志监听已是关闭状态，无需改动'
+    }
+} else {
+    # 首次安装时 BepInEx 还没生成这个文件，先写一份最小配置。
+    # BepInEx 首次启动会读取它、把其余默认项补进同一个文件并写回，这一项的值会被保留。
+    New-Item-Dry -Path (Join-Path $resolvedDir 'BepInEx\config') -ItemType Directory
+    $bxContent = "[Logging]`r`n`r`n## 由一键安装脚本写入：本游戏必须关闭，否则插件不会被加载`r`n## 详见 BepInEx issue #809 / #798`r`nUnityLogListening = false`r`n"
+    Set-Utf8NoBom-Dry -Path $bxCfg -Value $bxContent -Note '预置（首次启动 BepInEx 会补齐其余默认项）'
+    Write-Ok '已预置 BepInEx 配置并关闭 Unity 日志监听'
+}
+
+# ----------------------------------------------------------------------
+# 4) 预置 Unity 基础库，免去首次启动的联网下载
+# ----------------------------------------------------------------------
+Write-Title '第 4 步 / 共 5 步：预置 Unity 基础库（免下载）'
 
 $ulZip = Join-Path $PSScriptRoot "..\payload\unity-libs\$UnityLibsZipName"
 if (-not (Test-Path -LiteralPath $ulZip)) { $ulZip = Join-Path $PSScriptRoot "unity-libs\$UnityLibsZipName" }
@@ -585,9 +662,9 @@ if (Test-Path -LiteralPath $ulZip) {
 }
 
 # ----------------------------------------------------------------------
-# 4) 放入插件并写入人数
+# 5) 放入插件并写入人数
 # ----------------------------------------------------------------------
-Write-Title '第 4 步 / 共 4 步：安装人数解锁插件'
+Write-Title '第 5 步 / 共 5 步：安装人数解锁插件'
 
 $dll = Join-Path $PSScriptRoot '..\payload\ConSimMorePlayers.dll'
 if (-not (Test-Path -LiteralPath $dll)) { $dll = Join-Path $PSScriptRoot 'ConSimMorePlayers.dll' }

@@ -30,14 +30,17 @@
 **安装前会完整备份**到游戏目录下的 `_ConSimMorePlayers_备份\`，**永不删除任何原文件**。
 想恢复原版，双击 `一键卸载.bat` 即可。
 
-### 首次启动会「准备」比较久，然后报一次错 —— 这是正常的
+### 首次启动会「准备」比较久
 
 首次启动时 BepInEx 需要：
 
 1. 准备 Unity 基础库（**本安装包已预置，无需联网下载**，见 `NOTICE.md`）
 2. 用 Cpp2IL 把游戏代码反编译一遍，生成 170 个辅助程序集到 `<游戏目录>\BepInEx\interop\`（约 100 MB，约 10 秒到几分钟）
 
-做完后日志里会冒出红色报错：
+耐心等它跑完即可。**安装脚本已经帮你关掉了 BepInEx 一个在本游戏上有问题的功能**（见下一小节），
+所以正常情况下**不应该出现红色报错**。
+
+万一你还是看到这一条：
 
 ```
 [Fatal] Unable to execute IL2CPP chainloader, no plugins will be loaded
@@ -45,11 +48,36 @@
         at Il2CppInterop...GenericMethod_GetMethod_Hook.FindTargetMethod()
 ```
 
-**这不算失败，插件没坏。** 上面两步是在「本次这个进程」里现做的，BepInEx 紧接着在同一进程初始化会撞上
+那是「准备」恰好发生在本进程里，BepInEx 紧接着在同一进程初始化时撞上了
 [Il2CppInterop issue #183](https://github.com/BepInEx/Il2CppInterop/issues/183)（官方标记 *Not planned*）。
 **把游戏完全关掉、重新启动一次即可**，此时 interop 已生成，不再走那条路径。
 
 > 顺带一提：那个黑色日志窗口**只点「最小化」，千万不要点右上角的 ✕** —— 那会连着游戏一起关掉。
+
+### ⚠️ 装了 v1.0.0 的人：每次启动都报 `MissingMethodException`
+
+v1.0.0 的安装包有个缺陷 —— 它没有关掉 BepInEx 的 Unity 日志监听，而那个功能在本游戏上
+**必然失败**，导致插件根本不加载（游戏里人数还是 4）。症状是**每次**启动都出现：
+
+```
+[Error] Unable to execute IL2CPP chainloader, no plugins will be loaded
+[Error] System.MissingMethodException: Method not found:
+        'LogCallback LogCallback.op_Implicit(System.Action`3<System.String,UnityEngine.LogType>)'
+   at BepInEx.Unity.IL2CPP.Logging.IL2CPPUnityLogSource..ctor()
+   at BepInEx.Unity.IL2CPP.IL2CPPChainloader.SetupUnityLogging()
+```
+
+**v1.0.1 已修复**（安装脚本第 3 步会写入 `UnityLogListening = false`）。
+已经装了旧版的不用重装，手工改一处就行：
+
+1. 用记事本打开 `<游戏目录>\BepInEx\config\BepInEx.cfg`
+2. 把 `UnityLogListening = true` 改成 `UnityLogListening = false`
+   （文件里找不到这一行，就在末尾补 `[Logging]` 和 `UnityLogListening = false` 两行）
+3. 保存，重启游戏
+
+关掉它**不影响插件自己的日志** —— 那些走 `ManualLogSource` 直接写 `LogOutput.log`，
+不经过 Unity 的日志回调。参考
+[BepInEx issue #809](https://github.com/BepInEx/BepInEx/issues/809) / [#798](https://github.com/BepInEx/BepInEx/issues/798)。
 
 ### 怎么确认装好了
 
@@ -176,11 +204,19 @@ Download the one-click installer from [Releases](https://github.com/HCLIArno/Con
 (the script is Chinese-only). It auto-detects the game directory via Steam AppID `1273400`,
 backs up everything before writing, and never deletes original files.
 
-On first launch, BepInEx downloads/builds its IL2CPP interop assemblies and **then throws
-`Sequence contains more than one element`** — this is a known
-[Il2CppInterop issue #183](https://github.com/BepInEx/Il2CppInterop/issues/183) and is expected.
-**Just restart the game once.** (The Unity base libraries are pre-bundled here, so no download
+On first launch, BepInEx builds its IL2CPP interop assemblies, which takes a while.
+The installer also disables BepInEx's Unity log listener, which cannot work on this game and
+would otherwise break the whole chainloader. If you still see
+`Sequence contains more than one element` on the very first run, that is the known
+[Il2CppInterop issue #183](https://github.com/BepInEx/Il2CppInterop/issues/183) —
+**just restart the game once**. (The Unity base libraries are pre-bundled here, so no download
 is needed for those.)
+
+> **Upgrading from v1.0.0?** That release was missing the log-listener fix, so the plugin never
+> loaded and every launch printed `MissingMethodException: ... LogCallback.op_Implicit ...`.
+> v1.0.1 sets `UnityLogListening = false` for you. To repair v1.0.0 by hand, edit
+> `<game dir>\BepInEx\config\BepInEx.cfg` and change `UnityLogListening = true` to `false`,
+> then restart the game.
 
 Build from source with `dotnet build src\ConSimMorePlayers\ConSimMorePlayers.csproj -c Release -p:GameDir="<game dir>"`.
 See [`docs/开发者说明.md`](docs/开发者说明.md) for the full developer notes (Chinese).
